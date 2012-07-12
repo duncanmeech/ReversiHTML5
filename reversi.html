@@ -1,0 +1,579 @@
+<!DOCTYPE>
+<html>
+<head>
+    <title>Canvas Writer</title>
+    <style type="text/css">
+
+        .button
+        {
+            font-size:24px;
+            font-family:Arial,sans-serif;
+            color:#444444;
+            background-color:#F3F3F3;
+            border-top-style:solid;
+            border-top-color:#D9D9D9;
+            border-top-width:1px;
+            border-bottom-style:solid;
+            border-bottom-color:#D9D9D9;
+            border-bottom-width:1px;
+            border-left-style:solid;
+            border-left-color:#D9D9D9;
+            border-left-width:1px;
+            border-right-style:solid;
+            border-right-color:#D9D9D9;
+            border-right-width:1px;
+
+        }
+        .button:hover
+        {
+            color:#A0A0A0;
+        }
+
+        .button[disabled],
+        .button[disabled]:hover,
+        .button[disabled]:active {
+            color:#A0A0A0;
+            cursor:default;
+            background: #D0D0D0;
+            border-top-style:double;
+            border-top-color:#D0D0D0;
+            border-top-width:1px;
+            border-bottom-style:double;
+            border-bottom-color:#D0D0D0;
+            border-bottom-width:1px;
+            border-left-style:solid;
+            border-left-color:#D0D0D0;
+            border-left-width:1px;
+            border-right-style:solid;
+            border-right-color:#D0D0D0;
+            border-right-width:1px;
+        }
+
+         select.s1
+        {
+            width: 145px;
+        }
+        p.status
+        {
+            color:#444444;
+            font-size:24px;
+            font-family:Arial,sans-serif;
+            font-weight:bold;
+
+            width: 100%;
+        }
+        p.knodes
+        {
+            color:#444444;
+            font: 0.8em Arial, Helvetica;
+
+            width: 100%;
+        }
+        form.form1
+        {
+            color:#444444;
+            font: 1.0em Arial, Helvetica;
+            text-align:center;
+        }
+
+
+    </style>
+</head>
+<body>
+
+    <p align="center">
+        <button id="newgame" class="button" >New Game</button>
+        <button id="makemove" class="button" >Make Move</button>
+        <button id="takeback" class="button" >Take Back</button>
+    </p>
+
+    <p id="status" class="status" align="center" valign="center">Initializing...</p>
+
+    <p align="center">
+        <canvas id="canvasID" width="512" height="512" ></canvas>
+    </p>
+
+
+        <form class="form1">
+            A.I. Thinking Time:
+            <input checked="true" type="radio" name="time" id="one" />1 second
+            <input type="radio" name="time" id="five" />5 seconds
+            <input type="radio" name="time" id="fifteen" />15 seconds
+            <input type="radio" name="time" id="thirty" />30 seconds
+        </form>
+
+
+    <p class="knodes" id="knodes" align="center">HTML5 Gomuko, (c) Smart Little Games</p>
+
+    <p align="center"><a class="knodes" href="http://en.wikipedia.org/wiki/Reversi">How to Play Reversi</a></p>
+
+</body>
+
+<script src="CommonScripts/Eventist.js"></script>
+<script src="ReversiScripts/ReversiBoard.js"></script>
+
+
+<script type="text/javascript">var switchTo5x=true;</script>
+<script type="text/javascript" src="http://w.sharethis.com/button/buttons.js"></script>
+<script type="text/javascript" src="http://s.sharethis.com/loader.js"></script>
+
+<!-- Google analytics injection -->
+<script type="text/javascript">
+
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-20315080-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function () {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+
+</script>
+
+<script type="text/javascript" >
+
+    // set background color
+
+    document.bgColor="#FFFFFF";
+
+    // create the engine as worker object
+
+    var worker;
+
+    try {
+
+        worker = new Worker( "ReversiScripts/ReversiEngine.js");
+
+        worker.onmessage = OnEngineMessage;
+    }
+    catch( e ) {
+
+        window.alert( "Sorry your browser does not have the\ncapabilities required to run this program.\n\nThis program is optimized for the Chrome browser from Google.")
+    }
+
+    // click handlers for buttons
+
+    document.getElementById("newgame").onclick = OnNewGame;
+
+    document.getElementById("makemove").onclick = OnMakeMove;
+
+    document.getElementById("takeback").onclick = OnTakeBack;
+
+    // get the drawing context
+
+    var canvas;
+
+    canvas = document.getElementById("canvasID" );
+
+    // the board once the engine is initialized
+
+    var b;
+
+    // Starting the worker by sending a first message...to initialize the engine
+
+    worker.postMessage( { name: "M_Initialize" } );
+
+    // Engine state variables, these mirror those in Engine.EngineState() and are
+    // returned by any message that changes the state of the game
+
+    var UNKNOWN = -1; // before the engine is initialized
+
+    var WHITE_WIN = 0;
+
+    var BLACK_WIN = 1;
+
+    var WHITE_MOVE = 2;
+
+    var BLACK_MOVE = 3;
+
+    var DRAW = 4;
+
+    var WHITE_PASS = 5;
+
+    var BLACK_PASS = 6;
+
+    var THINKING = 7;
+
+    // the current state of the game
+
+    var state;
+
+    //
+    // messages from the web worker appear here
+    //
+    function OnEngineMessage(event) {
+
+        var message = event.data.name;
+
+        switch (message) {
+
+            // after the engine has been initialized and acknowledges as such
+
+            case "M_Initialize_ACK": {
+
+                // click handlers for buttons
+
+                document.getElementById("newgame").onclick = OnNewGame;
+
+                document.getElementById("makemove").onclick = OnMakeMove;
+
+                document.getElementById("takeback").onclick = OnTakeBack;
+
+                // get the drawing context
+
+                var canvas;
+
+                try {
+
+                    canvas = document.getElementById("canvasID" );
+
+                    // create the board
+
+                    b = new ReversiBoard(canvas);
+
+                    // sink the click event on the board
+
+                    b.SquareClicked.Add(OnSquareClicked);
+
+                    // get the initial state of the game [ LIGHT_MOVE or DARK_MOVE depending on who goes first ]
+
+                    SetState( event.data.state, event.data.totals );
+
+                    // update board
+
+                    b.UpdateBoard( event.data.board, null, event.data.moves )
+                }
+                catch ( e ) {
+
+                    window.alert( "Sorry your browser does not have the\ncapabilities required to run this program.\n\nThis program is optimized for the Chrome browser from Google.")
+                }
+
+            } break;
+
+            // after the engine has played a move
+
+            case "M_MakeMove_ACK": {
+
+                // get new state of game
+
+                SetState( event.data.state, event.data.totals  );
+
+                // update board
+
+                b.UpdateBoard( event.data.board, event.data.lastmove, event.data.moves );
+
+                // display knodes
+
+                var p = document.getElementById( "knodes");
+
+                p.textContent = "A.I. Speed: " + event.data.knodes + "K nodes per second.";
+
+            } break;
+
+            // after playing a user move
+
+            case "M_PlayMove_ACK": {
+
+                // debug output
+
+                //console.log( event.data.pvs );
+
+                // update state
+
+                SetState( event.data.state, event.data.totals );
+
+                // process if move was legal
+
+                if ( event.data.legal == true ) {
+
+                    // update board
+
+                    b.UpdateBoard(  event.data.board, event.data.lastmove, event.data.moves );
+
+                    // if game is still in progress that have the computer play the next move
+                    // ( if its the computers turn to move but it must pass we ask the computer to make that move
+
+                    if ( state == WHITE_MOVE || state == BLACK_MOVE || state == WHITE_PASS || state == BLACK_PASS)
+                        OnMakeMove();
+
+                }
+                else
+                    SetState( event.data.state, event.data.totals );
+
+            } break;
+
+            // after performing a take back
+
+            case "M_TakeBack_ACK": {
+
+                // get new state of game
+
+                SetState( event.data.state,event.data.totals  );
+
+                // update board
+
+                b.UpdateBoard(  event.data.board, event.data.lastmove, event.data.moves );
+
+            } break;
+
+            // after performing a new game
+
+            case "M_NewGame_ACK": {
+
+                // get new state of game
+
+                SetState( event.data.state,event.data.totals  );
+
+                // update board with empty move history
+
+                b.UpdateBoard(  event.data.board, null, event.data.moves );
+
+            } break;
+        }
+    }
+
+    // when the user clicks new game
+
+    function OnNewGame() {
+
+
+        if ( confirm("Start a New Game?")) {
+
+            // set UI state to busy
+
+            SetState( THINKING );
+
+            // send request to engine
+
+            worker.postMessage( { name: "M_NewGame" } );
+        }
+
+    }
+
+    // when the pass button is clicked, we want to the engine to make two moves if possible, one for the pass
+    // and then take their turn
+
+    function OnPass() {
+
+        if ( state == WHITE_PASS || state == BLACK_PASS ) {
+
+            // thinking state
+
+            SetState( THINKING );
+
+            // play null move, after which the computer will play its move
+
+            worker.postMessage( { name: "M_PlayMove", row:-1, column:-1 } );
+        }
+    }
+
+    // when the user clicks make a move button
+
+    function OnMakeMove() {
+
+        if ( state == WHITE_MOVE || state == BLACK_MOVE || state == WHITE_PASS || state == BLACK_PASS ) {
+
+            // set UI state to busy
+
+            SetState( THINKING );
+
+            // get thinking time for computer
+
+            var time;
+
+            if ( document.getElementById( "one").checked == true )
+                time = 1;
+            if ( document.getElementById( "five").checked == true )
+                time = 5;
+            if ( document.getElementById( "fifteen").checked == true )
+                time = 15;
+            if ( document.getElementById( "thirty").checked == true )
+                time = 30;
+
+            // play move
+
+            worker.postMessage( { name: "M_MakeMove", thinkingTime:time } );
+
+        }
+    }
+
+    // when the user clicks take back
+
+    function OnTakeBack() {
+
+        SetState( THINKING );
+
+        worker.postMessage( { name: "M_TakeBack" } );
+
+    }
+
+    //
+    // setup the pass button UI
+    //
+    function ShowPassButton() {
+
+        if ( document.getElementById("temp") == null ) {
+
+            var elem = '<p id="temp"align="center"><button id="pass" class="button" >Click to Pass</button></p>';
+
+            InsertHTML( document.getElementById("canvasID"), elem);
+
+            // when clicked we just have the computer play the next move, which must always be a pass
+
+            document.getElementById("pass").onclick = OnPass;
+        }
+    }
+
+    //
+    // hide pass if not present
+    //
+    function HidePassButton() {
+
+        if ( document.getElementById("temp")) {
+
+            document.getElementById("temp").parentNode.removeChild(document.getElementById("temp"));
+        }
+    }
+
+    //
+    // insert HTML on all browsers ( hopefully )
+    //
+    function InsertHTML (relTo, htmlToInsert ) {
+
+        if (relTo.insertAdjacentHTML) {        // Internet Explorer, Opera, Google Chrome and Safari
+            relTo.insertAdjacentHTML ("beforeBegin", htmlToInsert);
+        }
+        else {
+            var range = document.createRange ();
+
+            var docFragmentToInsert = range.createContextualFragment (htmlToInsert);
+
+            relTo.parentNode.insertBefore (docFragmentToInsert, relTo);
+        }
+    }
+
+    //
+    // when the user clicks a square on the board
+    //
+    function OnSquareClicked(a) {
+
+        var r = a[0];
+
+        var c = a[1];
+
+        SetState( THINKING );
+
+        worker.postMessage( { name: "M_PlayMove", row:r, column:c } );
+
+    }
+
+    // set the state of the game, if thinking or unknown then buttons etc are disabled
+
+    function SetState( s,t ) {
+
+        state = s;
+
+        if ( s == THINKING || s == UNKNOWN  ) {
+
+            document.getElementById("newgame").disabled = "disabled";
+
+            document.getElementById("makemove").disabled = "disabled";
+
+            document.getElementById("takeback").disabled = "disabled";
+
+            if ( b != null )
+                b.EnableCursor(false);
+
+            HidePassButton();
+        }
+        else
+        {
+            // ensure pass button is hidden
+
+            HidePassButton();
+
+            // the new game is always available when not thinking as is takeback
+
+            document.getElementById("newgame").disabled = null;
+
+            document.getElementById("takeback").disabled = null;
+
+            // make move and inputs to the board are only enabled when it is LIGHT or DARK to move
+
+            if ( s == WHITE_MOVE || s == BLACK_MOVE ) {
+
+                document.getElementById("makemove").disabled = null;
+
+                b.EnableCursor( true );
+            }
+            else
+            {
+                // end of game states...or passing
+
+                if ( s == DRAW || s == WHITE_WIN || s == BLACK_WIN )
+                {
+                    document.getElementById("makemove").disabled = "disabled";
+
+                    b.EnableCursor( false );
+                }
+                else {
+
+                    document.getElementById("makemove").disabled = null;
+
+                    b.EnableCursor( true );
+                }
+
+                // show pass button if passing
+
+                if ( s == WHITE_PASS || s == BLACK_PASS ) {
+
+                    ShowPassButton();
+                }
+            }
+        }
+
+        // update status message
+
+        var statusLabel = document.getElementById("status");
+
+        var s;
+
+        switch ( s ) {
+
+            case UNKNOWN: s = "Initializing..."; break;
+
+            case WHITE_WIN: s = "White Wins"; break;
+
+            case BLACK_WIN: s = "Black Wins"; break;
+
+            case WHITE_MOVE: s = "White To Move"; break;
+
+            case BLACK_MOVE: s = "Black To Move"; break;
+
+            case WHITE_PASS: s = "White To Pass"; break;
+
+            case BLACK_PASS: s = "Black To Pass"; break;
+
+            case DRAW: s = "The Game Is Drawn"; break;
+
+            case THINKING: s= "Thinking..."; break;
+
+        }
+
+        if ( t )
+            s += " ( W:" + t.White + " - B:" + t.Black + " )";
+
+        statusLabel.textContent = s;
+
+
+    }
+
+
+</script>
+<script>
+    var options={ "publisher": "a67e81ef-429b-4457-886c-95298fe479bb", "position": "left", "ad": { "visible": false, "openDelay": 5, "closeDelay": 0}, "chicklets": { "items": ["facebook", "twitter", "linkedin", "email", "sharethis", "pinterest"]}};
+    var st_hover_widget = new sharethis.widgets.hoverbuttons(options);
+</script>
+</html>
